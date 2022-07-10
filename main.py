@@ -5,17 +5,23 @@ import sys
 import os
 import time
 import signal
-import sqlite3
+import argparse
 
 import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
+
+arg_parser = argparse.ArgumentParser()
+arg_parser.add_argument('--version', action='version',
+                        version='Cloudflare Minion 0.1')
+arg_parser.add_argument('--wipe-mode', action='store_true')
+args = arg_parser.parse_args()
+
 CLOUDFLARE_API_URL = os.getenv('CLOUDFLARE_API_URL', '')
 CLOUDFLARE_API_TOKEN = os.getenv('CLOUDFLARE_API_TOKEN', '')
 CLOUDFLARE_EMAIL = os.getenv('CLOUDFLARE_EMAIL', '')
 CLOUDFLARE_ZONE = os.getenv('CLOUDFLARE_ZONE', '')
-SANDBOX_MODE = os.getenv('SANDBOX_MODE', True)
 
 
 def sig_handler(signum, frame):
@@ -30,10 +36,10 @@ def check_python3() -> bool:
     return False
 
 
-def delete_zone_names(zone_id: str, zone_names: dict, sandbox: bool = True):
+def delete_zone_names(zone_id: str, zone_names: dict, wipe_mode: bool = False):
     for key, value in zone_names.items():
         deletion_status = 'PASS'
-        if sandbox != True:
+        if wipe_mode == True:
             r = httpx.delete(CLOUDFLARE_API_URL + '/' + zone_id + '/dns_records/' + key,
                              headers={
                                  'Content-Type': 'application/json',
@@ -42,7 +48,8 @@ def delete_zone_names(zone_id: str, zone_names: dict, sandbox: bool = True):
                              })
             deletion_status = r.status_code
             time.sleep(1)
-        print(f"[INF] Deleting name: {value['name']}, Type: {value['type']} ... {deletion_status}")
+        print(
+            f"[INF] Deleting name: {value['name']}, Type: {value['type']} ... {deletion_status}")
 
 
 def get_zone_names(zone_id: str) -> dict:
@@ -92,7 +99,7 @@ def main():
                   r.json()['errors'][0]['message'])
         zone_names = get_zone_names(r.json()['result'][0]['id'])
         delete_zone_names(r.json()['result'][0]['id'],
-                          zone_names, SANDBOX_MODE)
+                          zone_names, args.wipe_mode)
 
     except Exception as ex:
         print("[EXC] Exception happened ->", ex)
